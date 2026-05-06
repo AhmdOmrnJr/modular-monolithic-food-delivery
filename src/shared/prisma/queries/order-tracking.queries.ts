@@ -7,6 +7,7 @@ export interface TrackingStatusStep {
   orderStatusKey: string;
   timestamp?: string;
   notes?: string;
+  updatedBy?: string;
   updatedAt: Date;
 }
 
