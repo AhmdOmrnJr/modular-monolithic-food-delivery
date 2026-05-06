@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   // rawBody: true enables raw Buffer access on req.rawBody for Stripe signature verification
@@ -24,6 +25,16 @@ async function bootstrap() {
   app.use(cookieParser());
   
   app.enableCors(); // allow cross-origin requests
+
+  // Setup Swagger
+  const config = new DocumentBuilder()
+    .setTitle('Food Delivery API')
+    .setDescription('Modular Monolithic Food Delivery API documentation')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api-docs', app, document);
 
   const port = process.env.PORT || 3000;
   const baseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
