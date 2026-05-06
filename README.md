@@ -37,7 +37,7 @@ This project is built with [NestJS](https://nestjs.com/) and leverages Prisma OR
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/AhmdOmrnJr/modular-monolithic-food-delivery.git
 cd modular-monolithic-food-delivery
 ```
 
