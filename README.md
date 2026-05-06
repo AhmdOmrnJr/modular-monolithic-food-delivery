@@ -1,98 +1,124 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Modular Monolithic Food Delivery
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A robust, scalable backend application for a food delivery platform, built using the Modular Monolith architecture pattern.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+This project is built with [NestJS](https://nestjs.com/) and leverages Prisma ORM with PostgreSQL for data persistence. It integrates with Stripe for secure payment processing and includes comprehensive order tracking, user authentication, and an event-driven internal architecture.
 
-## Description
+## Features
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Modular Monolith Architecture**: Clean separation of domains (e.g., Orders, Payments, Users, Auth) while keeping deployment simple as a single application.
+- **Authentication & Authorization**: Secure JWT-based authentication and role-based access control (using `bcrypt` and `@nestjs/jwt`).
+- **Payment Processing**: Full integration with Stripe, including webhook handling for payment reconciliation and synchronization with order tracking.
+- **Order Tracking System**: Granular order state management and tracking history using optimized PostgreSQL JSONB operations.
+- **Event-Driven Workflows**: Asynchronous communication between internal modules using `EventEmitter2` (e.g., triggering order status updates upon successful payment).
+- **API Documentation**: Auto-generated OpenAPI (Swagger) documentation.
+- **Containerized**: Production-ready Docker setup, including optimized builds for the Prisma client.
 
-## Project setup
+## Tech Stack
+
+- **Framework**: [NestJS](https://nestjs.com/) (Node.js/TypeScript)
+- **Database**: PostgreSQL
+- **ORM**: [Prisma](https://www.prisma.io/) (with `@prisma/adapter-pg`)
+- **Payments**: Stripe API
+- **Events**: NestJS Event Emitter
+- **Documentation**: Swagger / OpenAPI
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher recommended)
+- PostgreSQL
+- Docker and Docker Compose (for containerized setup)
+- Stripe Account (for payment integration)
+
+### Installation
+
+1. Clone the repository:
 
 ```bash
-$ npm install
+git clone <repository-url>
+cd modular-monolithic-food-delivery
 ```
 
-## Compile and run the project
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+### Environment Variables
+
+Create a `.env` file in the root directory and configure the necessary variables. 
+You will need to provide database connection strings, JWT secrets, and Stripe API keys:
+
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/food_delivery?schema=public"
+
+# Authentication
+JWT_SECRET="your-super-secret-jwt-key"
+JWT_EXPIRATION="1d"
+
+# Stripe
+STRIPE_SECRET_KEY="sk_test_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."
+```
+
+### Database Setup
+
+Run Prisma migrations to initialize your database schema and generate the Prisma Client:
+
+```bash
+npx prisma migrate dev
+```
+
+If you have a seed script set up, you can populate the database:
+
+```bash
+npm run seed
+```
+
+### Running the Application
 
 ```bash
 # development
-$ npm run start
+npm run start
 
 # watch mode
-$ npm run start:dev
+npm run start:dev
 
 # production mode
-$ npm run start:prod
+npm run start:prod
 ```
 
-## Run tests
+### Docker Deployment
+
+The application includes a `Dockerfile` and `docker-compose.yml` for easy containerization, ensuring the Prisma client generates correctly in a containerized environment.
+
+```bash
+docker-compose up --build
+```
+
+## API Documentation
+
+Once the application is running, you can access the Swagger API documentation to explore and interact with the endpoints:
+
+- **Local URL**: `http://localhost:3000/api` (or whichever port your app runs on)
+
+## Testing
 
 ```bash
 # unit tests
-$ npm run test
+npm run test
 
 # e2e tests
-$ npm run test:e2e
+npm run test:e2e
 
 # test coverage
-$ npm run test:cov
+npm run test:cov
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is [UNLICENSED](LICENSE).
