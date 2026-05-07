@@ -26,7 +26,7 @@ RUN npx prisma generate
 EXPOSE 3000
 
 # Start development server with file watch
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:dev"]
+CMD ["sh", "/app/docker-entrypoint.dev.sh"]
 
 # ── Stage 3: Builder (Production Build) ───────────────────────────────────────
 FROM base AS builder
