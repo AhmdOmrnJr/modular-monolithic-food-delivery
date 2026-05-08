@@ -5,6 +5,7 @@ import { CartEventService } from "./cartEvent.service";
 import { PrismaService } from "../../../shared/prisma/prisma.service";
 import { MenuItemService } from "../../menu/services/menuItem.service";
 import { Prisma, CartEventType } from "../../../generated/prisma";
+import { CartQueries } from "src/shared/prisma/queries/cart.query";
 
 @Injectable()
 export class CartService {
@@ -12,7 +13,8 @@ export class CartService {
     private readonly cartRepository: CartRepository,
     private readonly cartEventService: CartEventService,
     private readonly menuItemService: MenuItemService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly cartQueries: CartQueries,
   ) {}
 
   async handleCartEvent(event: CartEventDTO, customerId: string) {
@@ -37,39 +39,34 @@ export class CartService {
   }
 
   async addToCart(cartItem: CreateCartItemDTO, customerId: string) {
-    const menuItem = await this.menuItemService.getMenuItemById(cartItem.menuItemId);
+    // Perform Validation, Cart Upsert, Event Log, and Item Upsert in a SINGLE atomic database query (1 DB roundtrip)
+    const result = await this.cartQueries.addToCart(
+      customerId,
+      cartItem.menuItemId,
+      cartItem.quantity // We pass the delta, the CTE adds it and checks stock
+    );
 
-    if (!menuItem) throw new NotFoundException("Menu Item not found");
+    if (!result.menuItemExists) {
+      throw new NotFoundException("Menu Item not found");
+    }
+    if (!result.isStockSufficient) {
+      throw new NotFoundException("Not enough stock");
+    }
 
-    let cart: any = await this.cartRepository.getCartWithCartItemsByCustomerId(customerId);
-
-    const existingItem = cart.cartItems?.find((item: any) => item.menuItemId === cartItem.menuItemId);
-    const currentQuantity = existingItem ? existingItem.quantity : 0;
-    const newTotalQuantity = currentQuantity + cartItem.quantity;
-
-    if (menuItem.stockQuantity < newTotalQuantity) throw new NotFoundException("Not enough stock");
-
-    const newCartItem = await this.prisma.$transaction(async (tx) => {
-      await this.cartEventService.createEvent({
-        customerId,
-        eventType: CartEventType.ADD_TO_CART,
-        menuItemId: cartItem.menuItemId,
-        itemName: menuItem.menuItemName,
-        quantity: cartItem.quantity,
-        price: menuItem.price,
-      }, tx);
-
-      return await this.cartRepository.createCartItem(
-        { ...cartItem, quantity: newTotalQuantity },
-        cart.cartId,
-        { name: menuItem.menuItemName, price: menuItem.price },
-        tx
-      );
-    });
-
-    cart.cartItems = [newCartItem];
-
-    return { cart };
+    return {
+      cart: {
+        cartId: result.cartId,
+        cartItems: [
+          {
+            cartItemId: result.cartItemId,
+            cartId: result.cartId,
+            menuItemId: result.menuItemId,
+            quantity: result.quantity,
+            price: result.price,
+          }
+        ]
+      }
+    };
   }
 
   async getCartWithCartItemsByCustomerId(customerId: string, tx?: Prisma.TransactionClient) {
@@ -78,103 +75,30 @@ export class CartService {
   }
 
   private async updateQuantityByMenuItemId(menuItemId: string, quantity: number, customerId: string) {
-    const cartId = await this.cartRepository.findCartIdByCustomerId(customerId);
-
-    return await this.prisma.$transaction(async (tx) => {
-      await this.cartEventService.createEvent({
-        customerId,
-        eventType: CartEventType.UPDATE_QUANTITY,
-        menuItemId,
-        quantity,
-      }, tx);
-
-      return await this.cartRepository.updateCartItemQuantityByCartIdAndMenuItemId(
-        cartId,
-        menuItemId,
-        quantity,
-        tx
-      );
-    });
+    return await this.cartQueries.updateQuantity(customerId, menuItemId, quantity);
   }
 
   private async removeCartItemByMenuItemId(menuItemId: string, customerId: string) {
-    const cartId = await this.cartRepository.findCartIdByCustomerId(customerId);
-
-    return await this.prisma.$transaction(async (tx) => {
-      // 1. Remove Item (returns deleted item with price)
-      const deletedItem = await this.cartRepository.removeCartItemByCartIdAndMenuItemId(
-        cartId,
-        menuItemId,
-        tx
-      );
-
-      // 2. Log Event
-      await this.cartEventService.createEvent({
-        customerId,
-        eventType: CartEventType.REMOVE_FROM_CART,
-        menuItemId,
-        price: deletedItem.price
-      }, tx);
-
-      return deletedItem;
-    });
+    return await this.cartQueries.removeFromCart(customerId, menuItemId);
   }
 
   async clearCart(customerId: string, tx?: Prisma.TransactionClient) {
+    // Keep the validation if you want to throw 404s for missing carts
     const cart = await this.cartRepository.findCartByCustomerId(customerId);
     if (!cart) throw new NotFoundException("Cart not found!");
 
-    if (tx) {
-        await this.cartEventService.createEvent({
-            customerId,
-            eventType: CartEventType.CLEAR_CART,
-        }, tx);
-        await this.cartRepository.clearCart(cart.cartId, tx);
-    } else {
-        await this.prisma.$transaction(async (activeTx) => {
-            await this.cartEventService.createEvent({
-                customerId,
-                eventType: CartEventType.CLEAR_CART,
-            }, activeTx);
-            await this.cartRepository.clearCart(cart.cartId, activeTx);
-        });
-    }
+    // Pass 'tx' to the query. If 'tx' is undefined, the query uses 'this.prisma'
+    await this.cartQueries.clearCart(customerId, tx);
   }
 
   async lockCart(customerId: string, tx?: Prisma.TransactionClient) {
-    if (tx) {
-        await this.cartEventService.createEvent({
-            customerId,
-            eventType: CartEventType.LOCK_CART,
-        }, tx);
-        await this.cartRepository.lockCart(customerId, tx);
-    } else {
-        await this.prisma.$transaction(async (activeTx) => {
-            await this.cartEventService.createEvent({
-                customerId,
-                eventType: CartEventType.LOCK_CART,
-            }, activeTx);
-            await this.cartRepository.lockCart(customerId, activeTx);
-        });
-    }
+    // Single atomic call, participates in external transaction if tx is passed
+    await this.cartQueries.lockCart(customerId, tx);
   }
 
   async unlockCart(customerId: string, tx?: Prisma.TransactionClient) {
-    if (tx) {
-        await this.cartEventService.createEvent({
-            customerId,
-            eventType: CartEventType.UNLOCK_CART,
-        }, tx);
-        await this.cartRepository.unlockCart(customerId, tx);
-    } else {
-        await this.prisma.$transaction(async (activeTx) => {
-            await this.cartEventService.createEvent({
-                customerId,
-                eventType: CartEventType.UNLOCK_CART,
-            }, activeTx);
-            await this.cartRepository.unlockCart(customerId, activeTx);
-        });
-    }
+    // Single atomic call, participates in external transaction if tx is passed
+    await this.cartQueries.unlockCart(customerId, tx);
   }
 
   async clearCartByCustomerId(customerId: string, tx?: Prisma.TransactionClient) {
