@@ -23,53 +23,54 @@ export class CartQueries {
     // 1 query to rule them all: Validate -> Upsert Cart -> Insert Event -> Upsert Item
     const query = `
       WITH menu_item AS (
-        SELECT "menuItemName", "price", "stockQuantity"
-        FROM "MenuItem"
-        WHERE "menuItemId" = $4
+        SELECT "menuItemName", "price", "stock_quantity"
+        FROM "menu_items"
+        WHERE "menu_item_id" = $4
       ),
       existing_cart AS (
-        SELECT "cartId" FROM "Cart" WHERE "customerId" = $2
+        SELECT "cart_id" FROM "carts" WHERE "customer_id" = $2
       ),
       existing_cart_item AS (
         SELECT "quantity"
-        FROM "CartItem"
-        WHERE "cartId" = (SELECT "cartId" FROM existing_cart) 
-          AND "menuItemId" = $4
+        FROM "cart_items"
+        WHERE "cart_id" = (SELECT "cart_id" FROM existing_cart) 
+          AND "menu_item_id" = $4
       ),
       validation AS (
         SELECT 
-          m."stockQuantity" as stock_quantity,
+          m."stock_quantity" as stock_quantity,
           m."menuItemName" as item_name,
           m."price" as price,
           COALESCE(ci."quantity", 0) as current_quantity,
-          CASE WHEN m."stockQuantity" >= COALESCE(ci."quantity", 0) + $5::int THEN true ELSE false END as is_stock_sufficient,
-          CASE WHEN m."stockQuantity" IS NOT NULL THEN true ELSE false END as item_exists
+          CASE WHEN m."stock_quantity" >= COALESCE(ci."quantity", 0) + $5::int THEN true ELSE false END as is_stock_sufficient,
+          CASE WHEN m."stock_quantity" IS NOT NULL THEN true ELSE false END as item_exists
         FROM (SELECT 1) _
         LEFT JOIN menu_item m ON true
         LEFT JOIN existing_cart_item ci ON true
       ),
       cart_upsert AS (
-        INSERT INTO "Cart" ("cartId", "customerId", "updatedAt")
+        INSERT INTO "carts" ("cart_id", "customer_id", "updated_at")
         SELECT $1, $2, NOW()
         FROM validation
         WHERE is_stock_sufficient = true
-        ON CONFLICT ("customerId") DO UPDATE 
-        SET "updatedAt" = NOW()
-        RETURNING "cartId"
+        ON CONFLICT ("customer_id") DO UPDATE 
+        SET "updated_at" = NOW()
+        RETURNING "cart_id"
       ),
       cart_item_upsert AS (
-        INSERT INTO "CartItem" ("cartItemId", "cartId", "menuItemId", "quantity", "price")
-        SELECT $6, cu."cartId", $4, $5::int, v.price
+        INSERT INTO "cart_items" ("cart_item_id", "cart_id", "menu_item_id", "quantity", "price", "updated_at")
+        SELECT $6, cu."cart_id", $4, $5::int, v.price, NOW()
         FROM cart_upsert cu
         CROSS JOIN validation v
         WHERE v.is_stock_sufficient = true
-        ON CONFLICT ("cartId", "menuItemId") DO UPDATE
-        SET "quantity" = "CartItem"."quantity" + EXCLUDED."quantity",
-            "price" = EXCLUDED."price"
-        RETURNING "cartItemId", "cartId", "menuItemId", "quantity", "price"
+        ON CONFLICT ("cart_id", "menu_item_id") DO UPDATE
+        SET "quantity" = "cart_items"."quantity" + EXCLUDED."quantity",
+            "price" = EXCLUDED."price",
+            "updated_at" = NOW()
+        RETURNING "cart_item_id", "cart_id", "menu_item_id", "quantity", "price"
       ),
       event_insert AS (
-        INSERT INTO "CartEvent" ("id", "customerId", "eventType", "menuItemId", "itemName", "quantity", "price", "eventDate")
+        INSERT INTO "cart_events" ("id", "customer_id", "event_type", "menu_item_id", "item_name", "quantity", "price", "event_date")
         SELECT $3, $2, 'ADD_TO_CART', $4, v.item_name, $5::int, v.price, NOW()
         FROM cart_item_upsert cu
         CROSS JOIN validation v
@@ -77,9 +78,9 @@ export class CartQueries {
       SELECT 
         v.item_exists as "menuItemExists",
         v.is_stock_sufficient as "isStockSufficient",
-        ciu."cartItemId",
-        ciu."cartId", 
-        ciu."menuItemId", 
+        ciu."cart_item_id" as "cartItemId",
+        ciu."cart_id" as "cartId", 
+        ciu."menu_item_id" as "menuItemId", 
         ciu."quantity", 
         ciu."price"
       FROM validation v
@@ -104,19 +105,25 @@ export class CartQueries {
 
     const query = `
       WITH event_insert AS (
-        INSERT INTO "CartEvent" ("id", "customerId", "eventType", "menuItemId", "quantity", "eventDate")
+        INSERT INTO "cart_events" ("id", "customer_id", "event_type", "menu_item_id", "quantity", "event_date")
         VALUES ($1, $2, 'UPDATE_QUANTITY', $3, $4, NOW())
       ),
       update_item AS (
-        UPDATE "CartItem" ci
-        SET "quantity" = $4
-        FROM "Cart" c
-        WHERE ci."cartId" = c."cartId" 
-          AND c."customerId" = $2 
-          AND ci."menuItemId" = $3
+        UPDATE "cart_items" ci
+        SET "quantity" = $4, "updated_at" = NOW()
+        FROM "carts" c
+        WHERE ci."cart_id" = c."cart_id" 
+          AND c."customer_id" = $2 
+          AND ci."menu_item_id" = $3
         RETURNING ci.*
       )
-      SELECT * FROM update_item;
+      SELECT 
+        ci."cart_item_id" as "cartItemId",
+        ci."cart_id" as "cartId",
+        ci."menu_item_id" as "menuItemId",
+        ci."quantity",
+        ci."price"
+      FROM update_item ci;
     `;
 
     const result = await this.prisma.$queryRawUnsafe<any[]>(query, newEventId, customerId, menuItemId, newQuantity);
@@ -129,15 +136,15 @@ export class CartQueries {
     // This query deletes the item and uses its dynamic price to log the event simultaneously
     const query = `
       WITH delete_item AS (
-        DELETE FROM "CartItem" ci
-        USING "Cart" c
-        WHERE ci."cartId" = c."cartId" 
-          AND c."customerId" = $2 
-          AND ci."menuItemId" = $3
+        DELETE FROM "cart_items" ci
+        USING "carts" c
+        WHERE ci."cart_id" = c."cart_id" 
+          AND c."customer_id" = $2 
+          AND ci."menu_item_id" = $3
         RETURNING ci.price
       ),
       event_insert AS (
-        INSERT INTO "CartEvent" ("id", "customerId", "eventType", "menuItemId", "price", "eventDate")
+        INSERT INTO "cart_events" ("id", "customer_id", "event_type", "menu_item_id", "price", "event_date")
         SELECT $1, $2, 'REMOVE_FROM_CART', $3, price, NOW()
         FROM delete_item
       )
@@ -154,14 +161,14 @@ export class CartQueries {
 
     const query = `
       WITH event_insert AS (
-        INSERT INTO "CartEvent" ("id", "customerId", "eventType", "eventDate")
+        INSERT INTO "cart_events" ("id", "customer_id", "event_type", "event_date")
         VALUES ($1, $2, 'CLEAR_CART', NOW())
       ),
       clear_items AS (
-        DELETE FROM "CartItem" ci
-        USING "Cart" c
-        WHERE ci."cartId" = c."cartId" 
-          AND c."customerId" = $2
+        DELETE FROM "cart_items" ci
+        USING "carts" c
+        WHERE ci."cart_id" = c."cart_id" 
+          AND c."customer_id" = $2
       )
       SELECT 1;
     `;
@@ -176,13 +183,13 @@ export class CartQueries {
 
     const query = `
       WITH event_insert AS (
-        INSERT INTO "CartEvent" ("id", "customerId", "eventType", "eventDate")
+        INSERT INTO "cart_events" ("id", "customer_id", "event_type", "event_date")
         VALUES ($1, $2, 'LOCK_CART', NOW())
       ),
       lock_cart AS (
-        UPDATE "Cart"
-        SET "isLocked" = true, "updatedAt" = NOW()
-        WHERE "customerId" = $2
+        UPDATE "carts"
+        SET "is_locked" = true, "updated_at" = NOW()
+        WHERE "customer_id" = $2
       )
       SELECT 1;
     `;
@@ -196,13 +203,13 @@ export class CartQueries {
 
     const query = `
       WITH event_insert AS (
-        INSERT INTO "CartEvent" ("id", "customerId", "eventType", "eventDate")
+        INSERT INTO "cart_events" ("id", "customer_id", "event_type", "event_date")
         VALUES ($1, $2, 'UNLOCK_CART', NOW())
       ),
       unlock_cart AS (
-        UPDATE "Cart"
-        SET "isLocked" = false, "updatedAt" = NOW()
-        WHERE "customerId" = $2
+        UPDATE "carts"
+        SET "is_locked" = false, "updated_at" = NOW()
+        WHERE "customer_id" = $2
       )
       SELECT 1;
     `;
