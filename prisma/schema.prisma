@@ -248,6 +248,7 @@ model PaymentAttempt {
   idempotencyKey String   @id @map("idempotency_key")
   // orderId points to Order, DB will enforce FK constraint via raw SQL migration
   orderId        String?  @map("order_id")  
+  customerId     String?  @map("customer_id")
   status         PaymentAttemptStatus @map("status")
   provider       String   @map("provider")
   transactionId  String?  @map("transaction_id")
@@ -258,6 +259,7 @@ model PaymentAttempt {
 
   // No @relation here to prevent cross-module coupling
   @@index([orderId])
+  @@index([customerId])
   @@index([status])
   @@index([createdAt])
   @@map("payment_attempts")

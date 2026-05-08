@@ -15977,6 +15977,7 @@ export namespace Prisma {
   export type PaymentAttemptMinAggregateOutputType = {
     idempotencyKey: string | null
     orderId: string | null
+    customerId: string | null
     status: $Enums.PaymentAttemptStatus | null
     provider: string | null
     transactionId: string | null
@@ -15987,6 +15988,7 @@ export namespace Prisma {
   export type PaymentAttemptMaxAggregateOutputType = {
     idempotencyKey: string | null
     orderId: string | null
+    customerId: string | null
     status: $Enums.PaymentAttemptStatus | null
     provider: string | null
     transactionId: string | null
@@ -15997,6 +15999,7 @@ export namespace Prisma {
   export type PaymentAttemptCountAggregateOutputType = {
     idempotencyKey: number
     orderId: number
+    customerId: number
     status: number
     provider: number
     transactionId: number
@@ -16010,6 +16013,7 @@ export namespace Prisma {
   export type PaymentAttemptMinAggregateInputType = {
     idempotencyKey?: true
     orderId?: true
+    customerId?: true
     status?: true
     provider?: true
     transactionId?: true
@@ -16020,6 +16024,7 @@ export namespace Prisma {
   export type PaymentAttemptMaxAggregateInputType = {
     idempotencyKey?: true
     orderId?: true
+    customerId?: true
     status?: true
     provider?: true
     transactionId?: true
@@ -16030,6 +16035,7 @@ export namespace Prisma {
   export type PaymentAttemptCountAggregateInputType = {
     idempotencyKey?: true
     orderId?: true
+    customerId?: true
     status?: true
     provider?: true
     transactionId?: true
@@ -16114,6 +16120,7 @@ export namespace Prisma {
   export type PaymentAttemptGroupByOutputType = {
     idempotencyKey: string
     orderId: string | null
+    customerId: string | null
     status: $Enums.PaymentAttemptStatus
     provider: string
     transactionId: string | null
@@ -16142,6 +16149,7 @@ export namespace Prisma {
   export type PaymentAttemptSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     idempotencyKey?: boolean
     orderId?: boolean
+    customerId?: boolean
     status?: boolean
     provider?: boolean
     transactionId?: boolean
@@ -16153,6 +16161,7 @@ export namespace Prisma {
   export type PaymentAttemptSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     idempotencyKey?: boolean
     orderId?: boolean
+    customerId?: boolean
     status?: boolean
     provider?: boolean
     transactionId?: boolean
@@ -16164,6 +16173,7 @@ export namespace Prisma {
   export type PaymentAttemptSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     idempotencyKey?: boolean
     orderId?: boolean
+    customerId?: boolean
     status?: boolean
     provider?: boolean
     transactionId?: boolean
@@ -16175,6 +16185,7 @@ export namespace Prisma {
   export type PaymentAttemptSelectScalar = {
     idempotencyKey?: boolean
     orderId?: boolean
+    customerId?: boolean
     status?: boolean
     provider?: boolean
     transactionId?: boolean
@@ -16183,7 +16194,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type PaymentAttemptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"idempotencyKey" | "orderId" | "status" | "provider" | "transactionId" | "responseData" | "createdAt" | "updatedAt", ExtArgs["result"]["paymentAttempt"]>
+  export type PaymentAttemptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"idempotencyKey" | "orderId" | "customerId" | "status" | "provider" | "transactionId" | "responseData" | "createdAt" | "updatedAt", ExtArgs["result"]["paymentAttempt"]>
 
   export type $PaymentAttemptPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "PaymentAttempt"
@@ -16191,6 +16202,7 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       idempotencyKey: string
       orderId: string | null
+      customerId: string | null
       status: $Enums.PaymentAttemptStatus
       provider: string
       transactionId: string | null
@@ -16622,6 +16634,7 @@ export namespace Prisma {
   interface PaymentAttemptFieldRefs {
     readonly idempotencyKey: FieldRef<"PaymentAttempt", 'String'>
     readonly orderId: FieldRef<"PaymentAttempt", 'String'>
+    readonly customerId: FieldRef<"PaymentAttempt", 'String'>
     readonly status: FieldRef<"PaymentAttempt", 'PaymentAttemptStatus'>
     readonly provider: FieldRef<"PaymentAttempt", 'String'>
     readonly transactionId: FieldRef<"PaymentAttempt", 'String'>
@@ -26958,6 +26971,7 @@ export namespace Prisma {
   export const PaymentAttemptScalarFieldEnum: {
     idempotencyKey: 'idempotencyKey',
     orderId: 'orderId',
+    customerId: 'customerId',
     status: 'status',
     provider: 'provider',
     transactionId: 'transactionId',
@@ -28169,6 +28183,7 @@ export namespace Prisma {
     NOT?: PaymentAttemptWhereInput | PaymentAttemptWhereInput[]
     idempotencyKey?: StringFilter<"PaymentAttempt"> | string
     orderId?: StringNullableFilter<"PaymentAttempt"> | string | null
+    customerId?: StringNullableFilter<"PaymentAttempt"> | string | null
     status?: EnumPaymentAttemptStatusFilter<"PaymentAttempt"> | $Enums.PaymentAttemptStatus
     provider?: StringFilter<"PaymentAttempt"> | string
     transactionId?: StringNullableFilter<"PaymentAttempt"> | string | null
@@ -28180,6 +28195,7 @@ export namespace Prisma {
   export type PaymentAttemptOrderByWithRelationInput = {
     idempotencyKey?: SortOrder
     orderId?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
     status?: SortOrder
     provider?: SortOrder
     transactionId?: SortOrderInput | SortOrder
@@ -28194,6 +28210,7 @@ export namespace Prisma {
     OR?: PaymentAttemptWhereInput[]
     NOT?: PaymentAttemptWhereInput | PaymentAttemptWhereInput[]
     orderId?: StringNullableFilter<"PaymentAttempt"> | string | null
+    customerId?: StringNullableFilter<"PaymentAttempt"> | string | null
     status?: EnumPaymentAttemptStatusFilter<"PaymentAttempt"> | $Enums.PaymentAttemptStatus
     provider?: StringFilter<"PaymentAttempt"> | string
     transactionId?: StringNullableFilter<"PaymentAttempt"> | string | null
@@ -28205,6 +28222,7 @@ export namespace Prisma {
   export type PaymentAttemptOrderByWithAggregationInput = {
     idempotencyKey?: SortOrder
     orderId?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
     status?: SortOrder
     provider?: SortOrder
     transactionId?: SortOrderInput | SortOrder
@@ -28222,6 +28240,7 @@ export namespace Prisma {
     NOT?: PaymentAttemptScalarWhereWithAggregatesInput | PaymentAttemptScalarWhereWithAggregatesInput[]
     idempotencyKey?: StringWithAggregatesFilter<"PaymentAttempt"> | string
     orderId?: StringNullableWithAggregatesFilter<"PaymentAttempt"> | string | null
+    customerId?: StringNullableWithAggregatesFilter<"PaymentAttempt"> | string | null
     status?: EnumPaymentAttemptStatusWithAggregatesFilter<"PaymentAttempt"> | $Enums.PaymentAttemptStatus
     provider?: StringWithAggregatesFilter<"PaymentAttempt"> | string
     transactionId?: StringNullableWithAggregatesFilter<"PaymentAttempt"> | string | null
@@ -29708,6 +29727,7 @@ export namespace Prisma {
   export type PaymentAttemptCreateInput = {
     idempotencyKey: string
     orderId?: string | null
+    customerId?: string | null
     status: $Enums.PaymentAttemptStatus
     provider: string
     transactionId?: string | null
@@ -29719,6 +29739,7 @@ export namespace Prisma {
   export type PaymentAttemptUncheckedCreateInput = {
     idempotencyKey: string
     orderId?: string | null
+    customerId?: string | null
     status: $Enums.PaymentAttemptStatus
     provider: string
     transactionId?: string | null
@@ -29730,6 +29751,7 @@ export namespace Prisma {
   export type PaymentAttemptUpdateInput = {
     idempotencyKey?: StringFieldUpdateOperationsInput | string
     orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumPaymentAttemptStatusFieldUpdateOperationsInput | $Enums.PaymentAttemptStatus
     provider?: StringFieldUpdateOperationsInput | string
     transactionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -29741,6 +29763,7 @@ export namespace Prisma {
   export type PaymentAttemptUncheckedUpdateInput = {
     idempotencyKey?: StringFieldUpdateOperationsInput | string
     orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumPaymentAttemptStatusFieldUpdateOperationsInput | $Enums.PaymentAttemptStatus
     provider?: StringFieldUpdateOperationsInput | string
     transactionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -29752,6 +29775,7 @@ export namespace Prisma {
   export type PaymentAttemptCreateManyInput = {
     idempotencyKey: string
     orderId?: string | null
+    customerId?: string | null
     status: $Enums.PaymentAttemptStatus
     provider: string
     transactionId?: string | null
@@ -29763,6 +29787,7 @@ export namespace Prisma {
   export type PaymentAttemptUpdateManyMutationInput = {
     idempotencyKey?: StringFieldUpdateOperationsInput | string
     orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumPaymentAttemptStatusFieldUpdateOperationsInput | $Enums.PaymentAttemptStatus
     provider?: StringFieldUpdateOperationsInput | string
     transactionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -29774,6 +29799,7 @@ export namespace Prisma {
   export type PaymentAttemptUncheckedUpdateManyInput = {
     idempotencyKey?: StringFieldUpdateOperationsInput | string
     orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumPaymentAttemptStatusFieldUpdateOperationsInput | $Enums.PaymentAttemptStatus
     provider?: StringFieldUpdateOperationsInput | string
     transactionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -31291,6 +31317,7 @@ export namespace Prisma {
   export type PaymentAttemptCountOrderByAggregateInput = {
     idempotencyKey?: SortOrder
     orderId?: SortOrder
+    customerId?: SortOrder
     status?: SortOrder
     provider?: SortOrder
     transactionId?: SortOrder
@@ -31302,6 +31329,7 @@ export namespace Prisma {
   export type PaymentAttemptMaxOrderByAggregateInput = {
     idempotencyKey?: SortOrder
     orderId?: SortOrder
+    customerId?: SortOrder
     status?: SortOrder
     provider?: SortOrder
     transactionId?: SortOrder
@@ -31312,6 +31340,7 @@ export namespace Prisma {
   export type PaymentAttemptMinOrderByAggregateInput = {
     idempotencyKey?: SortOrder
     orderId?: SortOrder
+    customerId?: SortOrder
     status?: SortOrder
     provider?: SortOrder
     transactionId?: SortOrder

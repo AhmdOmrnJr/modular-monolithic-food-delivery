@@ -14,11 +14,12 @@ export class PaymentAttemptService {
     return this.paymentAttemptRepository.findByOrderId(orderId);
   }
 
-  async upsertPendingAttempt(key: string, orderId: string | null, provider: string, timestamp?: Date) {
+  async upsertPendingAttempt(key: string, orderId: string | null, customerId: string | null, provider: string, timestamp?: Date) {
     return this.paymentAttemptRepository.upsertPendingAttempt(
       {
         idempotencyKey: key,
         orderId,
+        customerId,
         status: PaymentAttemptStatus.PENDING,
         provider,
       },

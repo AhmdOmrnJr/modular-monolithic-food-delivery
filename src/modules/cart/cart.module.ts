@@ -6,6 +6,7 @@ import { CartRepository } from "./repositories/cart.repository";
 import { CartEventRepository } from "./repositories/cartEvent.repository";
 import { CartQueries } from "src/shared/prisma/queries/cart.query";
 import { MenuModule } from "../menu/menu.module";
+import { CartPaymentListener } from "./listeners/cart-payment.listener";
 
 @Module({
     imports: [MenuModule],
@@ -16,6 +17,7 @@ import { MenuModule } from "../menu/menu.module";
         CartRepository,
         CartEventRepository,
         CartQueries,
+        CartPaymentListener,
     ],
     exports: [CartService],
 })

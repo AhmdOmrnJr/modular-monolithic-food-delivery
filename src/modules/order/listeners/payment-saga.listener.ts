@@ -4,7 +4,6 @@ import { PAYMENT_EVENTS } from '../../payment/constants/payment.constants';
 import { ORDER_EVENTS } from '../constants/order.constants';
 import type { PaymentCapturedPayload, PaymentFailedPayload, StalePaymentPayload } from '../../payment/interfaces/payment-event.interface';
 import { OrderService } from '../services/order.service';
-import { CartService } from '../../cart/services/cart.service';
 import { MenuItemService } from '../../menu/services/menuItem.service';
 import { OrderStatusKey } from '../../../generated/prisma';
 
@@ -14,7 +13,6 @@ export class PaymentSagaListener {
 
   constructor(
     private readonly orderService: OrderService,
-    private readonly cartService: CartService,
     private readonly menuItemService: MenuItemService,
   ) {}
 
@@ -42,20 +40,7 @@ export class PaymentSagaListener {
         newOrderStatus: OrderStatusKey.COMPLETED,
       });
 
-      // 2. Resolve customerId — may be missing if event was emitted from capturePayment
-      //    directly rather than via the Stripe webhook (which always carries metadata).
-      let customerId = payload.customerId;
-      if (!customerId) {
-        const order = await this.orderService.findOrderById(payload.orderId);
-        customerId = order?.customerId ?? '';
-      }
-
-      // 3. Clear customer's cart
-      if (customerId) {
-        await this.cartService.clearCartByCustomerId(customerId);
-      }
-
-      this.logger.log(`Order ${payload.orderId} marked COMPLETED and cart cleared`);
+      this.logger.log(`Order ${payload.orderId} marked COMPLETED`);
     } catch (err: any) {
       this.logger.error(`Failed to process payment.captured for order ${payload.orderId}: ${err.message}`);
     }

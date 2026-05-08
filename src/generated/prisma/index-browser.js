@@ -241,6 +241,7 @@ exports.Prisma.OrderScalarFieldEnum = {
 exports.Prisma.PaymentAttemptScalarFieldEnum = {
   idempotencyKey: 'idempotencyKey',
   orderId: 'orderId',
+  customerId: 'customerId',
   status: 'status',
   provider: 'provider',
   transactionId: 'transactionId',

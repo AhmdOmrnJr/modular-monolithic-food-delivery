@@ -82,7 +82,7 @@ export class PaymentService {
 
     const strategy = this.strategyFactory.getStrategy(finalProvider);
 
-    await this.paymentAttemptService.upsertPendingAttempt(idempotencyKey, orderId, finalProvider, requestTimestamp);
+    await this.paymentAttemptService.upsertPendingAttempt(idempotencyKey, orderId, customerId, finalProvider, requestTimestamp);
 
     // --- Layer 2: API idempotency ---
     try {
@@ -120,12 +120,11 @@ export class PaymentService {
     const attempt = await this.paymentAttemptService.findAttempt(idempotencyKey);
 
     if (!attempt) throw new NotFoundException(`No payment attempt for order ${orderId}`);
-    if (attempt.status === PaymentAttemptStatus.SUCCESS) {
-      return;
-    }
-    if (attempt.status !== PaymentAttemptStatus.AUTHORIZED) {
+    if (attempt.status === PaymentAttemptStatus.SUCCESS) return;
+    
+    if (attempt.status !== PaymentAttemptStatus.AUTHORIZED) 
       throw new UnprocessableEntityException(`Cannot capture payment in status ${attempt.status}`);
-    }
+    
     if (!attempt.transactionId) throw new InternalServerErrorException('Missing transactionId for capture');
 
     const strategy = this.strategyFactory.getStrategy(attempt.provider);
@@ -141,7 +140,7 @@ export class PaymentService {
     // simply skip if the attempt is already SUCCESS.
     this.eventEmitter.emit(PAYMENT_EVENTS.CAPTURED, {
       orderId,
-      customerId: attempt.orderId ?? '', // orderId doubles as the order reference; customerId resolved by listener
+      customerId: attempt.customerId ?? '',
       transactionId: attempt.transactionId,
       amount: 0, // amount not critical here; webhook will carry the precise value
     } as PaymentCapturedPayload);

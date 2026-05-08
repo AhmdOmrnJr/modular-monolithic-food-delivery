@@ -27,8 +27,8 @@ export class OrderService {
         private readonly paymentService: PaymentService,
     ) {}
 
-    private async createPendingAttempt(idempotencyKey: string, timestamp: Date): Promise<void> {
-        await this.paymentAttemptService.upsertPendingAttempt(idempotencyKey, null, 'UNKNOWN', timestamp);
+    private async createPendingAttempt(idempotencyKey: string, customerId: string, timestamp: Date): Promise<void> {
+        await this.paymentAttemptService.upsertPendingAttempt(idempotencyKey, null, customerId, 'UNKNOWN', timestamp);
     }
 
     private async handleIdempotencyCheck(
@@ -256,7 +256,7 @@ export class OrderService {
             return existingOrder;
         }
 
-        await this.createPendingAttempt(idempotencyKey, requestTimestamp);
+        await this.createPendingAttempt(idempotencyKey, customerId, requestTimestamp);
 
         let resultContext: OrderContext;
 
