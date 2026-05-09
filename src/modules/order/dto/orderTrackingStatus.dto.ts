@@ -1,7 +1,16 @@
+export enum OrderTrackingStatus {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  PREPARING = "PREPARING",
+  OUTFORDELIVERY = "OUTFORDELIVERY",
+  DELIVERED = "DELIVERED",
+  CANCELED = "CANCELED",
+}
+
 export type TrackingStatusStep = {
-  orderStatusKey: "PENDING" | "ACCEPTED" | "PREPARING" | "OUTFORDELIVERY" | "DELIVERED" | "CANCELED";
+  orderStatusKey: OrderTrackingStatus;
   updatedAt: Date;
-  updatedBy?: string
+  updatedBy?: string;
 }
 
 export type OrderTrackingStatusDto = {
@@ -11,8 +20,8 @@ export type OrderTrackingStatusDto = {
 }
 
 export type UpdateOrderTrackingStatusDto = {
-  orderId: string
-  managerId: string
-  customerId: string
-  orderStatusKey: TrackingStatusStep["orderStatusKey"]
+  orderId: string;
+  managerId: string;
+  customerId: string;
+  orderStatusKey: OrderTrackingStatus;
 }

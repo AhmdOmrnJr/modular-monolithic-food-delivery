@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../../shared/prisma/prisma.service";
-import { OrderTrackingQueries, TrackingStatusStep } from "../../../shared/prisma/queries/order-tracking.queries";
+import { OrderTrackingQueries } from "../../../shared/prisma/queries/order-tracking.queries";
+import { OrderTrackingStatus } from "../dto/orderTrackingStatus.dto";
 
 @Injectable()
 export class OrderTrackingRepository {
-    constructor(private readonly prisma: PrismaService,
+    constructor(
+        private readonly prisma: PrismaService,
         private readonly orderTracking: OrderTrackingQueries
     ) {}
 
@@ -22,17 +24,8 @@ export class OrderTrackingRepository {
     async createOrderTracking(
         orderId: string,
         customerId: string,
-        orderStatusKey: TrackingStatusStep["orderStatusKey"] = "PENDING"
+        orderStatusKey: OrderTrackingStatus = OrderTrackingStatus.PENDING
     ) {
-        const STATUS_NAMES: Record<string, string> = {
-            PENDING:        'Pending',
-            ACCEPTED:       'Accepted',
-            PREPARING:      'Preparing',
-            OUTFORDELIVERY: 'Out For Delivery',
-            DELIVERED:      'Delivered',
-            CANCELED:       'Canceled',
-        };
-
         return await this.prisma.orderTracking.create({
             data: {
                 orderId,
@@ -40,7 +33,7 @@ export class OrderTrackingRepository {
                 trackingStatus: [
                     {
                         orderStatusKey,
-                        orderStatusName: STATUS_NAMES[orderStatusKey] ?? orderStatusKey,
+                        orderStatusName: orderStatusKey, // Use the enum value directly as the name
                         updatedAt: new Date().toISOString(),
                     }
                 ] as any,
@@ -51,21 +44,12 @@ export class OrderTrackingRepository {
     async appendOrderTrackingStatus(
         orderId: string,
         customerId: string,
-        orderStatusKey: TrackingStatusStep["orderStatusKey"],
+        orderStatusKey: OrderTrackingStatus,
         updatedBy?: string
     ) {
-        const STATUS_NAMES: Record<string, string> = {
-            PENDING:        'Pending',
-            ACCEPTED:       'Accepted',
-            PREPARING:      'Preparing',
-            OUTFORDELIVERY: 'Out For Delivery',
-            DELIVERED:      'Delivered',
-            CANCELED:       'Canceled',
-        };
-
         return await this.orderTracking.append(orderId, customerId, {
             orderStatusKey,
-            orderStatusName: STATUS_NAMES[orderStatusKey] ?? orderStatusKey,
+            orderStatusName: orderStatusKey, // Use the enum value directly as the name
             ...(updatedBy !== undefined ? { updatedBy } : {}),
         });
     }

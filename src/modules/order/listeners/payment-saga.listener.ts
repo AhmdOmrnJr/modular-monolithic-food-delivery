@@ -16,18 +16,18 @@ export class PaymentSagaListener {
     private readonly menuItemService: MenuItemService,
   ) {}
 
-  @OnEvent(ORDER_EVENTS.TRACKING_UPDATED)
-  async handleTrackingUpdated(payload: { orderId: string; orderStatusKey: string }) {
-    this.logger.log(`Syncing order status for ${payload.orderId} → ${payload.orderStatusKey}`);
-    try {
-      await this.orderService.updateOrderStatus({
-        orderId: payload.orderId,
-        newOrderStatus: payload.orderStatusKey as any,
-      });
-    } catch (err: any) {
-      this.logger.error(`Failed to sync order status for ${payload.orderId}: ${err.message}`);
-    }
-  }
+  // @OnEvent(ORDER_EVENTS.TRACKING_UPDATED)
+  // async handleTrackingUpdated(payload: { orderId: string; orderStatusKey: string }) {
+  //   this.logger.log(`Syncing order status for ${payload.orderId} → ${payload.orderStatusKey}`);
+  //   try {
+  //     await this.orderService.updateOrderStatus({
+  //       orderId: payload.orderId,
+  //       newOrderStatus: payload.orderStatusKey as any,
+  //     });
+  //   } catch (err: any) {
+  //     this.logger.error(`Failed to sync order status for ${payload.orderId}: ${err.message}`);
+  //   }
+  // }
 
   @OnEvent(PAYMENT_EVENTS.CAPTURED)
   async handlePaymentCaptured(payload: PaymentCapturedPayload) {

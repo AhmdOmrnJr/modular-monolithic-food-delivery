@@ -9,6 +9,8 @@ import { PaymentAttemptService } from "../../payment/services/payment-attempt.se
 import { NotificationService } from "../../../shared/notification/notification.service";
 import { Prisma, OrderStatusKey, PaymentAttemptStatus } from "../../../generated/prisma";
 import { ORDER_EVENTS } from "../constants/order.constants";
+import { OrderTrackingService } from "./orderTracking.service";
+import { OrderTrackingStatus } from "../dto/orderTrackingStatus.dto";
 
 @Injectable()
 export class OrderService {
@@ -21,7 +23,8 @@ export class OrderService {
         private readonly paymentAttemptService: PaymentAttemptService,
         private readonly notificationService: NotificationService,
         private readonly eventEmitter: EventEmitter2,
-    ) {}
+        private readonly orderTrackingService: OrderTrackingService,
+    ) { }
 
     private async createPendingAttempt(idempotencyKey: string, customerId: string, timestamp: Date): Promise<void> {
         await this.paymentAttemptService.upsertPendingAttempt(idempotencyKey, null, customerId, 'UNKNOWN', timestamp);
@@ -102,16 +105,18 @@ export class OrderService {
         if (order.orderStatus === OrderStatusKey.COMPLETED) throw new BadRequestException("Cannot cancel completed order");
         if (order.orderStatus === OrderStatusKey.CANCELED) throw new BadRequestException("Order is already cancelled");
 
-        // Guard: Prevent cancellation if PREPARING
-        // NOTE: OrderTrackingService injected circularly; use repo directly
-        const trackings = await this.orderRepository.findOrderById(orderId);
-        const trackingList = (trackings as any).orderTracking?.trackingStatus as unknown as { orderStatusKey: string }[] ?? [];
+        // Guard: Prevent cancellation if PREPARING or beyond
+        const tracking = await this.orderTrackingService.getOrderTrackingStatus(orderId, customerId);
+        const trackingList = (tracking.trackingStatus as { orderStatusKey: OrderTrackingStatus }[]) ?? [];
+        
         const hasReachedPreparing = trackingList.some(t =>
-            t.orderStatusKey === 'PREPARING' ||
-            t.orderStatusKey === 'OUTFORDELIVERY' ||
-            t.orderStatusKey === 'DELIVERED'
+            t.orderStatusKey === OrderTrackingStatus.PREPARING ||
+            t.orderStatusKey === OrderTrackingStatus.OUTFORDELIVERY ||
+            t.orderStatusKey === OrderTrackingStatus.DELIVERED
         );
-        if (hasReachedPreparing) throw new BadRequestException("Cannot cancel an order that is already being prepared");
+        if (hasReachedPreparing) {
+            throw new BadRequestException("Cannot cancel an order that is already being prepared");
+        }
 
         await this.orderRepository.updateOrderStatus({
             orderId,

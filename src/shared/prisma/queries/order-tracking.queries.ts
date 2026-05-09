@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Prisma } from '../../../generated/prisma';
 
@@ -59,9 +59,8 @@ export class OrderTrackingQueries {
       stepJson
     );
 
-    if (!result || result.length === 0) {
-      throw new Error('Order Tracking Status Not Found');
-    }
+    if (!result || result.length === 0) 
+      throw new NotFoundException('Order Tracking Status Not Found or unauthorized');
 
     return result[0];
   }
