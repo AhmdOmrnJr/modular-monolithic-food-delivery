@@ -16,7 +16,7 @@ export class StalePaymentJob {
     private readonly paymentAttemptService: PaymentAttemptService,
     private readonly eventEmitter: EventEmitter2,
     @Inject(STRIPE_CLIENT) private readonly stripeClient: any,
-  ) {}
+  ) { }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async handleStalePayments() {
@@ -70,18 +70,16 @@ export class StalePaymentJob {
             { reason: 'Stale payment — cancelled by cron job' },
           );
 
-          // Only emit the cancellation event for real order-level attempts.
-          // cart_ records are cleaned up silently — they have no active order to cancel.
-          if (attempt.idempotencyKey.startsWith('order_')) {
-            this.eventEmitter.emit(
-              PAYMENT_EVENTS.STALE,
-              {
-                orderId: attempt.orderId!,
-                transactionId: attempt.transactionId || undefined,
-                reason: 'Payment timed out',
-              } as StalePaymentPayload,
-            );
-          }
+          // 3. Emit the cancellation event for ANY attempt that has an orderId.
+          // This cancels the order and restores stock if the user abandoned the flow.
+          this.eventEmitter.emit(
+            PAYMENT_EVENTS.STALE,
+            {
+              orderId: attempt.orderId!,
+              transactionId: attempt.transactionId || undefined,
+              reason: 'Payment timed out',
+            } as StalePaymentPayload,
+          );
         } catch (err: any) {
           this.logger.error(`Failed to process stale attempt ${attempt.idempotencyKey}: ${err.message}`);
         }
