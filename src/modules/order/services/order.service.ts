@@ -1,16 +1,14 @@
 import { Injectable, Logger, InternalServerErrorException, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import { PrismaService } from "../../../shared/prisma/prisma.service";
 import { OrderRepository } from "../repositories/order.repository";
 import { OrderHandlerChainBuilder } from "../handlers/OrderHandlerChainBuilder";
 import { OrderContext } from "../types/OrderContext";
 import type { UpdateOrderStatusDto } from "../dto";
 import { PaymentAttemptService } from "../../payment/services/payment-attempt.service";
-import { RefundService } from "../../payment/services/refund.service";
-import { MenuItemService } from "../../menu/services/menuItem.service";
 import { NotificationService } from "../../../shared/notification/notification.service";
-import { OrderTrackingService } from "./orderTracking.service";
-import { PaymentService } from "../../payment/services/payment.service";
 import { Prisma, OrderStatusKey, PaymentAttemptStatus } from "../../../generated/prisma";
+import { ORDER_EVENTS } from "../constants/order.constants";
 
 @Injectable()
 export class OrderService {
@@ -21,10 +19,8 @@ export class OrderService {
         private readonly orderRepository: OrderRepository,
         private readonly chainBuilder: OrderHandlerChainBuilder,
         private readonly paymentAttemptService: PaymentAttemptService,
-        private readonly refundService: RefundService,
-        private readonly menuItemService: MenuItemService,
         private readonly notificationService: NotificationService,
-        private readonly paymentService: PaymentService,
+        private readonly eventEmitter: EventEmitter2,
     ) {}
 
     private async createPendingAttempt(idempotencyKey: string, customerId: string, timestamp: Date): Promise<void> {
@@ -98,21 +94,6 @@ export class OrderService {
         return await this.orderRepository.updateOrderStatus(data, tx);
     }
 
-    private async releasePaymentHold(orderId: string) {
-        const idempotencyKey = `order_${orderId}`;
-        const attempt = await this.paymentAttemptService.findAttempt(idempotencyKey);
-
-        if (!attempt) return;
-
-        if (attempt.status === PaymentAttemptStatus.AUTHORIZED) {
-            await this.paymentService.voidHold(orderId);
-        } else if (attempt.status === PaymentAttemptStatus.SUCCESS) {
-            // Need the order amount for the refund call
-            const order = await this.orderRepository.findOrderById(orderId);
-            await this.refundService.refundOrder(orderId, order.totalAmount);
-        }
-    }
-
     async cancelOrder(orderId: string, customerId: string) {
         const order = await this.orderRepository.findOrderById(orderId);
 
@@ -132,19 +113,19 @@ export class OrderService {
         );
         if (hasReachedPreparing) throw new BadRequestException("Cannot cancel an order that is already being prepared");
 
-        await this.releasePaymentHold(orderId);
-
         await this.orderRepository.updateOrderStatus({
             orderId,
             newOrderStatus: OrderStatusKey.CANCELED
         });
 
-        // Restore inventory via MenuItemService (stock restore is wired)
-        const orderItems = order.orderItems.map((item: any) => ({
-            menuItemId: item.menuItemId,
-            quantity: item.quantity,
-        }));
-        await this.menuItemService.reduceStock(orderItems.map(i => ({ ...i, quantity: -i.quantity })));
+        this.eventEmitter.emit(ORDER_EVENTS.CANCELED, {
+            orderId,
+            totalAmount: order.totalAmount,
+            orderItems: order.orderItems.map((item: any) => ({
+                menuItemId: item.menuItemId,
+                quantity: item.quantity,
+            })),
+        });
 
         return { message: "Order cancelled successfully" };
     }
@@ -157,15 +138,16 @@ export class OrderService {
         if (order.orderStatus === OrderStatusKey.CANCELED) throw new BadRequestException("Order is already cancelled");
         if (order.restaurantId !== restaurantId) throw new ForbiddenException("This order does not belong to your restaurant");
 
-        await this.releasePaymentHold(orderId);
-
         await this.orderRepository.updateOrderStatus({ orderId, newOrderStatus: OrderStatusKey.CANCELED });
 
-        const orderItems = order.orderItems.map((item: any) => ({
-            menuItemId: item.menuItemId,
-            quantity: -item.quantity, // negative to restore
-        }));
-        await this.menuItemService.reduceStock(orderItems);
+        this.eventEmitter.emit(ORDER_EVENTS.CANCELED, {
+            orderId,
+            totalAmount: order.totalAmount,
+            orderItems: order.orderItems.map((item: any) => ({
+                menuItemId: item.menuItemId,
+                quantity: item.quantity,
+            })),
+        });
 
         await this.notificationService.notifyCustomer(
             order.customerId,

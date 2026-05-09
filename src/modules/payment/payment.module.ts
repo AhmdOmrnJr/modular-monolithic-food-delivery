@@ -34,6 +34,7 @@ import { StalePaymentJob } from './jobs/stale-payment.job';
 
 // Listeners
 import { OrderTrackingListener } from './listeners/order-tracking.listener';
+import { PaymentCancellationListener } from './listeners/payment-cancellation.listener';
 
 @Global()
 @Module({
@@ -61,6 +62,7 @@ import { OrderTrackingListener } from './listeners/order-tracking.listener';
 
     StalePaymentJob,
     OrderTrackingListener,
+    PaymentCancellationListener,
   ],
   exports: [
     PaymentService,

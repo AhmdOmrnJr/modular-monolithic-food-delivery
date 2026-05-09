@@ -8,6 +8,7 @@ import { MenuCategoryRepository } from "./repositories/menuCategory.repository";
 import { MenuItemController } from "./controllers/menuItem.controller";
 import { MenuItemService } from "./services/menuItem.service";
 import { MenuItemRepository } from "./repositories/menuItem.repository";
+import { MenuInventoryListener } from "./listeners/menu-inventory.listener";
 
 @Module({
     controllers: [
@@ -22,6 +23,7 @@ import { MenuItemRepository } from "./repositories/menuItem.repository";
         MenuCategoryRepository,
         MenuItemService,
         MenuItemRepository,
+        MenuInventoryListener,
     ],
     exports: [
         MenuService,

@@ -66,4 +66,8 @@ export class MenuItemService {
         await Promise.all(stockUpdates);
     }
 
+    async restoreStockBatch(items: { menuItemId: string, quantity: number }[], tx?: any) {
+        await this.menuItemRepository.restoreStockBatch(items, tx);
+    }
+
 }
