@@ -25,17 +25,13 @@ import { AuditLogHandler } from './handlers/AuditLogHandler';
 // External Modules
 import { CartModule } from '../cart/cart.module';
 import { MenuModule } from '../menu/menu.module';
-import { UserModule } from '../user/user.module';
-import { CustomerModule } from '../customer/customer.module';
-import { RestaurantModule } from '../restaurant/restaurant.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [
     CartModule,
     MenuModule,
-    UserModule,
-    CustomerModule,
-    RestaurantModule,
+    PaymentModule,
   ],
   controllers: [OrderController],
   providers: [

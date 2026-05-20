@@ -25,7 +25,7 @@ export class UpdateOrderStatusHandler extends OrderHandler {
         }
 
         const newStatus = context.paymentResult.success
-            ? OrderStatusKey.COMPLETED // Changed from COMPLETED to ACCEPTED since order flow goes PENDING -> ACCEPTED -> PREPARING
+            ? OrderStatusKey.COMPLETED
             : OrderStatusKey.CANCELED;
 
         const updatedOrder = await this.orderRepository.updateOrderStatus({

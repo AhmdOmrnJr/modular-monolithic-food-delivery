@@ -6,8 +6,9 @@ import { CartRepository } from "./repositories/cart.repository";
 import { CartEventRepository } from "./repositories/cartEvent.repository";
 import { CartQueries } from "src/shared/prisma/queries/cart.query";
 import { MenuModule } from "../menu/menu.module";
-import { CartPaymentListener } from "./listeners/cart-payment.listener";
 
+import { CartModuleFacade } from "./facades/cart-module.facade";
+import { CART_MODULE_API } from "./interfaces/cart-module.interface";
 @Module({
     imports: [MenuModule],
     controllers: [CartController],
@@ -17,8 +18,11 @@ import { CartPaymentListener } from "./listeners/cart-payment.listener";
         CartRepository,
         CartEventRepository,
         CartQueries,
-        CartPaymentListener,
+        {
+            provide: CART_MODULE_API,
+            useClass: CartModuleFacade,
+        },
     ],
-    exports: [CartService],
+    exports: [CartService, CART_MODULE_API],
 })
 export class CartModule {}

@@ -1,7 +1,8 @@
-import { Module, Global } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
+import { CartModule } from '../cart/cart.module';
 
 // Config
 import { stripeProvider } from './config/stripe.config';
@@ -33,12 +34,12 @@ import { RefundService } from './services/refund.service';
 import { StalePaymentJob } from './jobs/stale-payment.job';
 
 // Listeners
-import { OrderTrackingListener } from './listeners/order-tracking.listener';
-import { PaymentCancellationListener } from './listeners/payment-cancellation.listener';
 
-@Global()
+import { PaymentModuleFacade } from './facades/payment-module.facade';
+import { PAYMENT_MODULE_API } from './interfaces/payment-module.interface';
+
 @Module({
-  imports: [],
+  imports: [CartModule],
   controllers: [StripeWebhookController],
   providers: [
     stripeProvider,
@@ -61,15 +62,17 @@ import { PaymentCancellationListener } from './listeners/payment-cancellation.li
     RefundService,
 
     StalePaymentJob,
-    OrderTrackingListener,
-    PaymentCancellationListener,
+    {
+      provide: PAYMENT_MODULE_API,
+      useClass: PaymentModuleFacade,
+    },
   ],
   exports: [
     PaymentService,
-    PaymentAttemptService,
     PaymentMethodService,
     PreferredPaymentSettingsService,
     RefundService,
+    PAYMENT_MODULE_API,
   ],
 })
 export class PaymentModule {}

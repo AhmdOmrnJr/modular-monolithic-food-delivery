@@ -1,13 +1,15 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { OrderHandler } from "./base/OrderHandler";
 import { OrderContext } from "../types/OrderContext";
-import { CartService } from "../../cart/services/cart.service";
+import { Inject } from "@nestjs/common";
+import type { ICartModuleApi } from "../../cart/interfaces/cart-module.interface";
+import { CART_MODULE_API } from "../../cart/interfaces/cart-module.interface";
 
 @Injectable()
 export class ClearCartHandler extends OrderHandler {
     private readonly logger = new Logger(ClearCartHandler.name);
 
-    constructor(private readonly cartService: CartService) {
+    constructor(@Inject(CART_MODULE_API) private readonly cartApi: ICartModuleApi) {
         super();
     }
 
@@ -19,7 +21,7 @@ export class ClearCartHandler extends OrderHandler {
 
         this.logger.log(`Clearing cart`);
 
-        await this.cartService.clearCartByCustomerId(context.customerId);
+        await this.cartApi.clearCartByCustomerId(context.customerId);
 
         this.logger.log(`Cart cleared successfully`);
     }

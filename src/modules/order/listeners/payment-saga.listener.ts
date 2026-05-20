@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PAYMENT_EVENTS } from '../../payment/constants/payment.constants';
-import { ORDER_EVENTS } from '../constants/order.constants';
-import type { PaymentCapturedPayload, PaymentFailedPayload, StalePaymentPayload } from '../../payment/interfaces/payment-event.interface';
+import type { PaymentAuthorizedPayload, PaymentCapturedPayload, PaymentFailedPayload, StalePaymentPayload } from '../../payment/interfaces/payment-event.interface';
 import { OrderService } from '../services/order.service';
-import { MenuItemService } from '../../menu/services/menuItem.service';
 import { OrderStatusKey } from '../../../generated/prisma';
+import { MENU_MODULE_API } from 'src/modules/menu/interfaces/menu-module.interface';
+import type { IMenuModuleApi } from 'src/modules/menu/interfaces/menu-module.interface';
 
 @Injectable()
 export class PaymentSagaListener {
@@ -13,8 +13,8 @@ export class PaymentSagaListener {
 
   constructor(
     private readonly orderService: OrderService,
-    private readonly menuItemService: MenuItemService,
-  ) {}
+    @Inject(MENU_MODULE_API) private readonly menuApi: IMenuModuleApi,
+  ) { }
 
   // @OnEvent(ORDER_EVENTS.TRACKING_UPDATED)
   // async handleTrackingUpdated(payload: { orderId: string; orderStatusKey: string }) {
@@ -28,6 +28,25 @@ export class PaymentSagaListener {
   //     this.logger.error(`Failed to sync order status for ${payload.orderId}: ${err.message}`);
   //   }
   // }
+
+  @OnEvent(PAYMENT_EVENTS.AUTHORIZED)
+  async handlePaymentAuthorized(payload: PaymentAuthorizedPayload) {
+    this.logger.log(`Handling payment.authorized for order ${payload.orderId}`);
+
+    try {
+      // Card pre-authorized — move order to COMPLETED so the restaurant can start preparing.
+      // The actual charge happens later when the restaurant marks the order as PREPARING
+      // (orderTracking.service.ts → capturePayment()).
+      await this.orderService.updateOrderStatus({
+        orderId: payload.orderId,
+        newOrderStatus: OrderStatusKey.COMPLETED,
+      });
+
+      this.logger.log(`Order ${payload.orderId} marked COMPLETED (payment pre-authorized)`);
+    } catch (err: any) {
+      this.logger.error(`Failed to process payment.authorized for order ${payload.orderId}: ${err.message}`);
+    }
+  }
 
   @OnEvent(PAYMENT_EVENTS.CAPTURED)
   async handlePaymentCaptured(payload: PaymentCapturedPayload) {
@@ -71,6 +90,20 @@ export class PaymentSagaListener {
     this.logger.log(`Handling payment.stale for order ${payload.orderId}`);
 
     try {
+      const order = await this.orderService.findOrderById(payload.orderId);
+      if (!order) {
+        this.logger.warn(`Stale payment received but order ${payload.orderId} not found`);
+        return;
+      }
+
+      if (
+        order.orderStatus === OrderStatusKey.COMPLETED ||
+        order.orderStatus === OrderStatusKey.CANCELED
+      ) {
+        this.logger.log(`Ignoring stale payment for order ${payload.orderId} because status is already ${order.orderStatus}`);
+        return;
+      }
+
       // Same logic as failed: cancel order and restore inventory
       await this.orderService.updateOrderStatus({
         orderId: payload.orderId,
@@ -106,7 +139,7 @@ export class PaymentSagaListener {
       }));
 
       // reduceStock with negative quantities restores stock
-      await this.menuItemService.reduceStock(
+      await this.menuApi.reduceStock(
         itemsToRestore.map(i => ({ ...i, quantity: -i.quantity }))
       );
 

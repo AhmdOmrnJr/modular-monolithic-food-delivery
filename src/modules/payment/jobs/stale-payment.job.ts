@@ -23,7 +23,7 @@ export class StalePaymentJob {
     this.logger.log('Checking for stale PENDING payments...');
 
     try {
-      // Find all PENDING payments older than 30 minutes
+      // Find all PENDING payments older than 30 minutes, including the related order
       const cutoff = new Date(Date.now() - 30 * 60 * 1000);
 
       const staleAttempts = await this.prisma.paymentAttempt.findMany({
@@ -70,8 +70,8 @@ export class StalePaymentJob {
             { reason: 'Stale payment — cancelled by cron job' },
           );
 
-          // 3. Emit the cancellation event for ANY attempt that has an orderId.
-          // This cancels the order and restores stock if the user abandoned the flow.
+          // Emit the cancellation event — this cancels the order and restores stock
+          // only for orders that are genuinely still PENDING (user abandoned the flow).
           this.eventEmitter.emit(
             PAYMENT_EVENTS.STALE,
             {

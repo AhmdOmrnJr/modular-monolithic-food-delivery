@@ -1,14 +1,15 @@
-import { Injectable, Logger, InternalServerErrorException, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from "@nestjs/common";
-import { EventEmitter2 } from "@nestjs/event-emitter";
+import { Injectable, Logger, InternalServerErrorException, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Inject } from "@nestjs/common";
+import type { IMenuModuleApi } from "../../menu/interfaces/menu-module.interface";
+import { MENU_MODULE_API } from "../../menu/interfaces/menu-module.interface";
+import type { IPaymentModuleApi } from "../../payment/interfaces/payment-module.interface";
+import { PAYMENT_MODULE_API } from "../../payment/interfaces/payment-module.interface";
 import { PrismaService } from "../../../shared/prisma/prisma.service";
 import { OrderRepository } from "../repositories/order.repository";
 import { OrderHandlerChainBuilder } from "../handlers/OrderHandlerChainBuilder";
 import { OrderContext } from "../types/OrderContext";
 import type { UpdateOrderStatusDto } from "../dto";
-import { PaymentAttemptService } from "../../payment/services/payment-attempt.service";
 import { NotificationService } from "../../../shared/notification/notification.service";
 import { Prisma, OrderStatusKey, PaymentAttemptStatus } from "../../../generated/prisma";
-import { ORDER_EVENTS } from "../constants/order.constants";
 import { OrderTrackingService } from "./orderTracking.service";
 import { OrderTrackingStatus } from "../dto/orderTrackingStatus.dto";
 
@@ -20,21 +21,21 @@ export class OrderService {
         private readonly prisma: PrismaService,
         private readonly orderRepository: OrderRepository,
         private readonly chainBuilder: OrderHandlerChainBuilder,
-        private readonly paymentAttemptService: PaymentAttemptService,
         private readonly notificationService: NotificationService,
-        private readonly eventEmitter: EventEmitter2,
         private readonly orderTrackingService: OrderTrackingService,
+        @Inject(MENU_MODULE_API) private readonly menuApi: IMenuModuleApi,
+        @Inject(PAYMENT_MODULE_API) private readonly paymentApi: IPaymentModuleApi,
     ) { }
 
     private async createPendingAttempt(idempotencyKey: string, customerId: string, timestamp: Date): Promise<void> {
-        await this.paymentAttemptService.upsertPendingAttempt(idempotencyKey, null, customerId, 'UNKNOWN', timestamp);
+        await this.paymentApi.upsertPendingAttempt(idempotencyKey, null, customerId, 'UNKNOWN', timestamp);
     }
 
     private async handleIdempotencyCheck(
         idempotencyKey: string,
         requestTimestamp: Date
     ): Promise<{ shouldProceed: boolean; existingOrder?: any }> {
-        const existingAttempt = await this.paymentAttemptService.findAttempt(idempotencyKey);
+        const existingAttempt = await this.paymentApi.findAttempt(idempotencyKey);
 
         if (!existingAttempt) {
             return { shouldProceed: true };
@@ -51,7 +52,7 @@ export class OrderService {
         if (existingAttempt.status === PaymentAttemptStatus.PENDING) {
             const ageMinutes = (Date.now() - existingAttempt.createdAt.getTime()) / 60000;
             if (ageMinutes > 5) {
-                await this.paymentAttemptService.finalizeAttempt(
+                await this.paymentApi.finalizeAttempt(
                     idempotencyKey,
                     false,
                     '',
@@ -72,7 +73,7 @@ export class OrderService {
         result: any,
         requestTimestamp: Date
     ): Promise<void> {
-        await this.paymentAttemptService.finalizeAttempt(
+        await this.paymentApi.finalizeAttempt(
             idempotencyKey,
             true,
             result.paymentResult?.transactionId || '',
@@ -123,14 +124,12 @@ export class OrderService {
             newOrderStatus: OrderStatusKey.CANCELED
         });
 
-        this.eventEmitter.emit(ORDER_EVENTS.CANCELED, {
-            orderId,
-            totalAmount: order.totalAmount,
-            orderItems: order.orderItems.map((item: any) => ({
-                menuItemId: item.menuItemId,
-                quantity: item.quantity,
-            })),
-        });
+        const orderItems = order.orderItems.map((item: any) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+        }));
+        await this.paymentApi.voidHold(orderId);
+        await this.menuApi.restoreStockBatch(orderItems);
 
         return { message: "Order cancelled successfully" };
     }
@@ -145,14 +144,12 @@ export class OrderService {
 
         await this.orderRepository.updateOrderStatus({ orderId, newOrderStatus: OrderStatusKey.CANCELED });
 
-        this.eventEmitter.emit(ORDER_EVENTS.CANCELED, {
-            orderId,
-            totalAmount: order.totalAmount,
-            orderItems: order.orderItems.map((item: any) => ({
-                menuItemId: item.menuItemId,
-                quantity: item.quantity,
-            })),
-        });
+        const orderItems = order.orderItems.map((item: any) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+        }));
+        await this.paymentApi.voidHold(orderId);
+        await this.menuApi.restoreStockBatch(orderItems);
 
         await this.notificationService.notifyCustomer(
             order.customerId,
@@ -198,7 +195,7 @@ export class OrderService {
         idempotencyKey: string,
         requestTimestamp: Date
     ) {
-        await this.paymentAttemptService.updateOrderId(
+        await this.paymentApi.updateOrderId(
             idempotencyKey,
             resultContext.order!.orderId
         );
@@ -257,7 +254,7 @@ export class OrderService {
             }
 
         } catch (err: any) {
-            await this.paymentAttemptService.finalizeAttempt(
+            await this.paymentApi.finalizeAttempt(
                 idempotencyKey,
                 false,
                 '',
@@ -274,7 +271,7 @@ export class OrderService {
         } catch (err: any) {
             this.logger.error(`Stripe API failed for order ${resultContext!.order.orderId}:`, err);
 
-            await this.paymentAttemptService.finalizeAttempt(
+            await this.paymentApi.finalizeAttempt(
                 idempotencyKey,
                 false,
                 '',

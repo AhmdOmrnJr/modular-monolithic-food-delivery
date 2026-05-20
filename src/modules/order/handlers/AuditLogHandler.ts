@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { OrderHandler } from "./base/OrderHandler";
 import { OrderContext } from "../types/OrderContext";
-import { AuditService } from "../../user/services/audit.service";
+import { AuditService } from "../../../shared/audit/audit.service";
 
 @Injectable()
 export class AuditLogHandler extends OrderHandler {

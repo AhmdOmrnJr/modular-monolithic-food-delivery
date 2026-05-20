@@ -1,13 +1,15 @@
 import { Injectable, Logger, InternalServerErrorException } from "@nestjs/common";
 import { OrderHandler } from "./base/OrderHandler";
 import { OrderContext } from "../types/OrderContext";
-import { PaymentService } from "../../payment/services/payment.service";
+import { Inject } from "@nestjs/common";
+import type { IPaymentModuleApi } from "../../payment/interfaces/payment-module.interface";
+import { PAYMENT_MODULE_API } from "../../payment/interfaces/payment-module.interface";
 
 @Injectable()
 export class ProcessPaymentHandler extends OrderHandler {
     private readonly logger = new Logger(ProcessPaymentHandler.name);
 
-    constructor(private readonly paymentService: PaymentService) {
+    constructor(@Inject(PAYMENT_MODULE_API) private readonly paymentApi: IPaymentModuleApi) {
         super();
     }
 
@@ -16,7 +18,7 @@ export class ProcessPaymentHandler extends OrderHandler {
 
         if (!context.order) throw new InternalServerErrorException("Order not found in context (ProcessPayment)");
 
-        const result = await this.paymentService.processPayment({
+        const result = await this.paymentApi.processPayment({
             customerId: context.customerId,
             orderId: context.order.orderId,
             amount: context.order.totalAmount,

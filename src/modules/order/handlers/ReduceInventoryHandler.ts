@@ -1,13 +1,15 @@
 import { Injectable, Logger, InternalServerErrorException } from "@nestjs/common";
 import { OrderHandler } from "./base/OrderHandler";
 import { OrderContext } from "../types/OrderContext";
-import { MenuItemService } from "../../menu/services/menuItem.service";
+import { Inject } from "@nestjs/common";
+import type { IMenuModuleApi } from "../../menu/interfaces/menu-module.interface";
+import { MENU_MODULE_API } from "../../menu/interfaces/menu-module.interface";
 
 @Injectable()
 export class ReduceInventoryHandler extends OrderHandler {
     private readonly logger = new Logger(ReduceInventoryHandler.name);
 
-    constructor(private readonly menuItemService: MenuItemService) {
+    constructor(@Inject(MENU_MODULE_API) private readonly menuApi: IMenuModuleApi) {
         super();
     }
 
@@ -18,7 +20,7 @@ export class ReduceInventoryHandler extends OrderHandler {
             throw new InternalServerErrorException("Cart items not found in context (ReduceInventory)");
         }
 
-        await this.menuItemService.reduceStock(context.cartItems, context.tx);
+        await this.menuApi.reduceStock(context.cartItems, context.tx);
 
         this.logger.log(`Inventory reduced successfully`);
     }

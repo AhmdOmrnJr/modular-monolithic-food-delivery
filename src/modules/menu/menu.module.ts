@@ -8,8 +8,9 @@ import { MenuCategoryRepository } from "./repositories/menuCategory.repository";
 import { MenuItemController } from "./controllers/menuItem.controller";
 import { MenuItemService } from "./services/menuItem.service";
 import { MenuItemRepository } from "./repositories/menuItem.repository";
-import { MenuInventoryListener } from "./listeners/menu-inventory.listener";
 
+import { MenuModuleFacade } from "./facades/menu-module.facade";
+import { MENU_MODULE_API } from "./interfaces/menu-module.interface";
 @Module({
     controllers: [
         MenuController,
@@ -23,12 +24,16 @@ import { MenuInventoryListener } from "./listeners/menu-inventory.listener";
         MenuCategoryRepository,
         MenuItemService,
         MenuItemRepository,
-        MenuInventoryListener,
+        {
+            provide: MENU_MODULE_API,
+            useClass: MenuModuleFacade,
+        },
     ],
     exports: [
         MenuService,
         MenuCategoryService,
         MenuItemService,
+        MENU_MODULE_API,
     ]
 })
 export class MenuModule {}

@@ -6,9 +6,9 @@ import { PaymentMethodService } from './payment-method.service';
 import { PaymentAttemptStatus } from '../../../generated/prisma';
 import { PaymentResult } from '../interfaces/payment-result.interface';
 import { ProcessPaymentDto } from '../dto/process-payment.dto';
-import { STRIPE_CLIENT, PAYMENT_EVENTS } from '../constants/payment.constants';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PaymentCapturedPayload } from '../interfaces/payment-event.interface';
+import { STRIPE_CLIENT } from '../constants/payment.constants';
+import type { ICartModuleApi } from '../../cart/interfaces/cart-module.interface';
+import { CART_MODULE_API } from '../../cart/interfaces/cart-module.interface';
 
 @Injectable()
 export class PaymentService {
@@ -20,7 +20,7 @@ export class PaymentService {
     private readonly paymentAttemptService: PaymentAttemptService,
     private readonly paymentMethodService: PaymentMethodService,
     @Inject(STRIPE_CLIENT) private readonly stripeClient: any,
-    private readonly eventEmitter: EventEmitter2,
+    @Inject(CART_MODULE_API) private readonly cartApi: ICartModuleApi,
   ) {}
 
   async processPayment(dto: ProcessPaymentDto): Promise<PaymentResult> {
@@ -134,16 +134,10 @@ export class PaymentService {
       capturedAt: new Date().toISOString(),
     });
 
-    // Emit CAPTURED so the order is marked COMPLETED immediately.
     // We do not rely solely on the async Stripe webhook (payment_intent.succeeded)
     // which may arrive seconds later. The webhook handler is idempotent and will
     // simply skip if the attempt is already SUCCESS.
-    this.eventEmitter.emit(PAYMENT_EVENTS.CAPTURED, {
-      orderId,
-      customerId: attempt.customerId ?? '',
-      transactionId: attempt.transactionId,
-      amount: 0, // amount not critical here; webhook will carry the precise value
-    } as PaymentCapturedPayload);
+    await this.cartApi.clearCartByCustomerId(attempt.customerId ?? '');
   }
 
   async voidHold(orderId: string): Promise<void> {
@@ -188,13 +182,7 @@ export class PaymentService {
       { amount: paymentIntent.amount_received / 100, reconciledManually: true },
     );
 
-    // Emit event so OrderModule/CartModule can update
-    this.eventEmitter.emit(PAYMENT_EVENTS.CAPTURED, {
-      orderId,
-      customerId,
-      transactionId: paymentIntent.id,
-      amount: paymentIntent.amount_received / 100,
-    } as PaymentCapturedPayload);
+    await this.cartApi.clearCartByCustomerId(customerId);
 
     return { success: true, message: 'Reconciled successfully', orderId };
   }

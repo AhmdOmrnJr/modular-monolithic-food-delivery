@@ -1,14 +1,14 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Injectable, NotFoundException, Inject } from "@nestjs/common";
+import type { IPaymentModuleApi } from "../../payment/interfaces/payment-module.interface";
+import { PAYMENT_MODULE_API } from "../../payment/interfaces/payment-module.interface";
 import { OrderTrackingRepository } from "../repositories/order-tracking.repository";
 import { OrderTrackingStatus, UpdateOrderTrackingStatusDto } from "../dto/orderTrackingStatus.dto";
-import { ORDER_EVENTS } from '../constants/order.constants';
 
 @Injectable()
 export class OrderTrackingService {
     constructor(
         private readonly orderTrackingRepository: OrderTrackingRepository,
-        private readonly eventEmitter: EventEmitter2,
+        @Inject(PAYMENT_MODULE_API) private readonly paymentApi: IPaymentModuleApi,
     ) { }
 
     async getOrderTrackingStatus(orderId: string, customerId: string) {
@@ -31,11 +31,10 @@ export class OrderTrackingService {
             updateDto.orderStatusKey,
             updateDto.managerId
         );
-        
-        // If restaurant marks as PREPARING → emit event so the payment module
-        // can capture the payment. Payment module owns capture logic, not tracking.
+        // If restaurant marks as PREPARING → capture the payment.
+        // Payment module owns capture logic, not tracking.
         if (updateDto.orderStatusKey === OrderTrackingStatus.PREPARING) {
-            this.eventEmitter.emit(ORDER_EVENTS.PREPARING, { orderId: updateDto.orderId });
+            await this.paymentApi.capturePayment(updateDto.orderId);
         }
 
         return updated;

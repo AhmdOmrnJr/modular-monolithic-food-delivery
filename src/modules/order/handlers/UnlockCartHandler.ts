@@ -1,13 +1,15 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { OrderHandler } from "./base/OrderHandler";
 import { OrderContext } from "../types/OrderContext";
-import { CartService } from "../../cart/services/cart.service";
+import { Inject } from "@nestjs/common";
+import type { ICartModuleApi } from "../../cart/interfaces/cart-module.interface";
+import { CART_MODULE_API } from "../../cart/interfaces/cart-module.interface";
 
 @Injectable()
 export class UnlockCartHandler extends OrderHandler {
     private readonly logger = new Logger(UnlockCartHandler.name);
 
-    constructor(private readonly cartService: CartService) {
+    constructor(@Inject(CART_MODULE_API) private readonly cartApi: ICartModuleApi) {
         super();
     }
 
@@ -20,7 +22,7 @@ export class UnlockCartHandler extends OrderHandler {
         this.logger.log(`Unlocking cart`);
 
         try {
-            await this.cartService.unlockCart(context.customerId, context.tx);
+            await this.cartApi.unlockCart(context.customerId, context.tx);
             context.isCartLocked = false;
             this.logger.log(`Cart unlocked successfully`);
         } catch (error) {
