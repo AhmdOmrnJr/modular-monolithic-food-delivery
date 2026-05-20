@@ -1,12 +1,14 @@
-import { Injectable, BadRequestException, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../../../shared/email/email.service';
 import { UserTokenService } from './user-token.service';
-import { UserService } from '../../user/services/user.service';
-import { CustomerService } from '../../customer/services/customer.service';
+import { USER_MODULE_API } from '../../user/interfaces/user-module.interface';
+import type { IUserModuleApi } from '../../user/interfaces/user-module.interface';
+import { CUSTOMER_MODULE_API } from '../../customer/interfaces/customer-module.interface';
+import type { ICustomerModuleApi } from '../../customer/interfaces/customer-module.interface';
 import { PasswordUtils } from '../utils/password.utils';
-import { RoleKey, TokenType } from '../../../generated/prisma';
+import { RoleKey, TokenType, User } from '../../../generated/prisma';
 import ms from 'ms';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 
@@ -14,8 +16,8 @@ import { PrismaService } from '../../../shared/prisma/prisma.service';
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly userService: UserService,
-    private readonly customerService: CustomerService,
+    @Inject(USER_MODULE_API) private readonly userApi: IUserModuleApi,
+    @Inject(CUSTOMER_MODULE_API) private readonly customerApi: ICustomerModuleApi,
     private readonly userTokenService: UserTokenService,
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
@@ -25,13 +27,13 @@ export class AuthService {
   async signup(signupDto: any) {
     const { name, password, email, phone } = signupDto;
 
-    const userCheck = await this.userService.findUserByEmail(email);
+    const userCheck = await this.userApi.findUserByEmail(email);
     if (userCheck) throw new ConflictException('Email already exists');
 
     const hashedPassword = await PasswordUtils.hash(password);
 
-    await this.prisma.$transaction(async (tx) => {
-      const newUser = await this.userService.createUser(
+    const { newUser } = await this.prisma.$transaction(async (tx) => {
+      const newUser = await this.userApi.createUser(
         {
           userName: name,
           userEmail: email,
@@ -42,7 +44,7 @@ export class AuthService {
 
       if (!newUser) throw new BadRequestException('Failed to Create User');
 
-      const newCustomer = await this.customerService.createCustomer(
+      const newCustomer = await this.customerApi.createCustomer(
         {
           userId: newUser.userId,
           customerPhone: phone,
@@ -54,18 +56,26 @@ export class AuthService {
 
       if (!newCustomer) throw new BadRequestException('Failed to Create Customer');
 
-      await this.userService.assignRoleToUser(newUser.userId, 'CUSTOMER', tx);
+      await this.userApi.assignRoleToUser(newUser.userId, 'CUSTOMER', tx);
 
       return { newUser };
-    }).then(async ({ newUser }) => {
-      const verificationLink = await this.generateVerificationToken(newUser.userId, newUser.userEmail);
-
-      await this.emailService.sendVerificationEmail(
-        newUser.userEmail,
-        verificationLink,
-        newUser.userName
-      );
     });
+
+    // True fire and forget email sending (with .catch() for process safety)
+    this.sendVerificationEmailAsync({
+      userId: newUser.userId,
+      userEmail: newUser.userEmail,
+      userName: newUser.userName,
+    }).catch((err) => {
+      console.error('[Auth] Failed to send verification email asynchronously:', err);
+    });
+
+    return { newUser };
+  }
+
+  private async sendVerificationEmailAsync(user: { userId: string; userEmail: string; userName: string }): Promise<void> {
+    const verificationLink = await this.generateVerificationToken(user.userId, user.userEmail);
+    await this.emailService.sendVerificationEmail(user.userEmail, verificationLink, user.userName);
   }
 
   async login(loginDto: any): Promise<any> {
@@ -73,8 +83,7 @@ export class AuthService {
 
     if (!email || !password) throw new BadRequestException('Email and password are required!');
 
-    // UserService can fetch relations if needed, or we fetch them separately
-    const user = await this.userService.findUserByEmail(email, {
+    const user = await this.userApi.findUserByEmail<User & { roles?: RoleKey[] }>(email, {
       userId: true,
       userName: true,
       userEmail: true,
@@ -86,37 +95,38 @@ export class AuthService {
     });
 
     if (!user) throw new UnauthorizedException('Invalid credentials!');
-    if (!(user as any).isActive) throw new UnauthorizedException('You do not have access to login to the system!');
-    if (!(user as any).isConfirmed) throw new UnauthorizedException('You have not confirmed your email!');
+    if (!user.isActive) throw new UnauthorizedException('You do not have access to login to the system!');
+    if (!user.isConfirmed) throw new UnauthorizedException('You have not confirmed your email!');
 
-    const match = await PasswordUtils.compare(password, (user as any).userPassword);
+    const match = await PasswordUtils.compare(password, user.userPassword);
     if (!match) throw new UnauthorizedException('Invalid credentials!');
 
     let userRoleKeys: RoleKey[] = [];
-    if ((user as any).roles && Array.isArray((user as any).roles)) {
-      userRoleKeys = (user as any).roles as RoleKey[];
+    if (user.roles && Array.isArray(user.roles)) {
+      userRoleKeys = user.roles;
     }
 
     const tokenPayload: any = {
-      userId: (user as any).userId,
-      userName: (user as any).userName,
-      userEmail: (user as any).userEmail,
+      userId: user.userId,
+      userName: user.userName,
+      userEmail: user.userEmail,
       userRoles: userRoleKeys,
     };
 
-    if ((user as any).isAdmin) {
+    if (user.isAdmin) {
       tokenPayload.isAdmin = true;
     }
 
-    // Fetch customer/restaurant details
-    const customer = await this.customerService.getCustomerByUserId((user as any).userId);
+    // Fetch customer details via the Customer Port (API)
+    const customer = await this.customerApi.getCustomerByUserId(user.userId);
     if (customer) {
       tokenPayload.customerId = customer.customerId;
     }
 
-    const userWithRestaurant = await this.userService.findUserWithRestaurant({ userId: (user as any).userId, userRole: 'RESTAURANT_MANAGER' });
-    if (userWithRestaurant && (userWithRestaurant as any).restaurant) {
-      tokenPayload.restaurantId = (userWithRestaurant as any).restaurant.restaurantId;
+    // Fetch restaurant manager details via the User Port (API)
+    const userWithRestaurant = await this.userApi.findUserWithRestaurant({ userId: user.userId, userRole: 'RESTAURANT_MANAGER' });
+    if (userWithRestaurant && userWithRestaurant.restaurant) {
+      tokenPayload.restaurantId = userWithRestaurant.restaurant.restaurantId;
     }
 
     const accessTokenSecret = this.configService.get<string>('ACCESS_TOKEN_SECRET') || 'access_secret';
@@ -128,21 +138,18 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync(tokenPayload, { secret: accessTokenSecret, expiresIn: accessTokenExpiry });
     const refreshToken = await this.jwtService.signAsync(tokenPayload, { secret: refreshTokenSecret, expiresIn: refreshTokenExpiry });
 
-    await this.userTokenService.deleteRefreshTokensByUserId((user as any).userId);
+    await this.userTokenService.deleteRefreshTokensByUserId(user.userId);
 
-    const now = new Date();
-    // const expiryDays = parseInt(refreshTokenExpiry, 10);
-    // const expiresAt = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000);
     const expiresAt = new Date(Date.now() + ms(refreshTokenExpiry));
 
     await this.userTokenService.createToken({
-      userId: (user as any).userId,
+      userId: user.userId,
       token: refreshToken,
       expiresAt: expiresAt,
       tokenType: TokenType.REFRESH,
     });
 
-    const { userPassword, ...safeUser } = user as any;
+    const { userPassword, ...safeUser } = user;
 
     return {
       accessToken,
@@ -152,7 +159,7 @@ export class AuthService {
   }
 
   async me(userId: string): Promise<any> {
-    const user = await this.userService.findUserById(userId, {
+    const user = await this.userApi.findUserById(userId, {
       userId: true,
       userName: true,
       userEmail: true,
@@ -175,16 +182,16 @@ export class AuthService {
       const jwtSecret = this.configService.get<string>('JWT_SECRET') || 'default_secret';
       const tokenData = this.jwtService.verify<{ userId: string; userEmail: string }>(token, { secret: jwtSecret });
 
-      const user = await this.userService.findUserByEmail(tokenData.userEmail, {
+      const user = await this.userApi.findUserByEmail(tokenData.userEmail, {
         isConfirmed: true,
         userEmail: true,
         userId: true,
       });
       
       if (!user) throw new BadRequestException('User not found!');
-      if ((user as any).isConfirmed) throw new BadRequestException('User is already verified!');
+      if (user.isConfirmed) throw new BadRequestException('User is already verified!');
 
-      await this.userService.findAndUpdateUserByEmail((user as any).userId, (user as any).userEmail, {
+      await this.userApi.findAndUpdateUserByEmail(user.userId, user.userEmail, {
         isConfirmed: true,
       });
     } catch (error) {
@@ -194,14 +201,19 @@ export class AuthService {
   }
 
   async resendVerification(email: string): Promise<void> {
-    const user = await this.userService.findUserByEmail(email);
+    const user = await this.userApi.findUserByEmail(email);
 
     if (!user) return; // Prevent enumeration
-    if ((user as any).isConfirmed) throw new BadRequestException('Email is already verified');
+    if (user.isConfirmed) throw new BadRequestException('Email is already verified');
 
-    const verificationLink = await this.generateVerificationToken((user as any).userId, (user as any).userEmail);
-
-    await this.emailService.sendVerificationEmail((user as any).userEmail, verificationLink, (user as any).userName);
+    // True fire and forget
+    this.sendVerificationEmailAsync({
+      userId: user.userId,
+      userEmail: user.userEmail,
+      userName: user.userName,
+    }).catch((err) => {
+      console.error('[Auth] Failed to send resend-verification email asynchronously:', err);
+    });
   }
 
   async refreshToken(token: string | null): Promise<any> {
@@ -213,7 +225,7 @@ export class AuthService {
       const refreshTokenSecret = this.configService.get<string>('REFRESH_TOKEN_SECRET') || 'refresh_secret';
       const userData = this.jwtService.verify(token, { secret: refreshTokenSecret });
 
-      const user = await this.userService.findUserById(userData.userId, {
+      const user = await this.userApi.findUserById<User & { roles?: RoleKey[] }>(userData.userId, {
         userId: true,
         userName: true,
         userEmail: true,
@@ -224,28 +236,28 @@ export class AuthService {
       });
 
       if (!user) throw new UnauthorizedException('User not found!');
-      if (!(user as any).isActive) throw new UnauthorizedException('User is inactive!');
+      if (!user.isActive) throw new UnauthorizedException('User is inactive!');
 
       const payload: any = {
-        userId: (user as any).userId,
-        userName: (user as any).userName,
-        userEmail: (user as any).userEmail,
-        userRoles: (user as any).roles || [], // RoleKey[]
+        userId: user.userId,
+        userName: user.userName,
+        userEmail: user.userEmail,
+        userRoles: user.roles || [], // RoleKey[]
       };
 
-      if ((user as any).isAdmin) {
+      if (user.isAdmin) {
         payload.isAdmin = true;
       }
 
-      // Fetch customer/restaurant details
-      const customer = await this.customerService.getCustomerByUserId((user as any).userId);
+      // Fetch customer details via the Customer Port (API)
+      const customer = await this.customerApi.getCustomerByUserId(user.userId);
       if (customer) {
         payload.customerId = customer.customerId;
       }
 
-      const userWithRestaurant = await this.userService.findUserWithRestaurant({ userId: (user as any).userId, userRole: 'RESTAURANT_MANAGER' });
-      if (userWithRestaurant && (userWithRestaurant as any).restaurant) {
-        payload.restaurantId = (userWithRestaurant as any).restaurant.restaurantId;
+      const userWithRestaurant = await this.userApi.findUserWithRestaurant({ userId: user.userId, userRole: 'RESTAURANT_MANAGER' });
+      if (userWithRestaurant && userWithRestaurant.restaurant) {
+        payload.restaurantId = userWithRestaurant.restaurant.restaurantId;
       }
 
       const accessTokenSecret = this.configService.get<string>('ACCESS_TOKEN_SECRET') || 'access_secret';
@@ -253,7 +265,7 @@ export class AuthService {
       
       const accessToken = this.jwtService.sign(payload, { secret: accessTokenSecret, expiresIn: accessTokenExpiry });
 
-      const { userPassword, ...safeUser } = user as any;
+      const { userPassword, ...safeUser } = user;
 
       return {
         accessToken,
@@ -277,7 +289,7 @@ export class AuthService {
   }
 
   async forgetPassword(email: string): Promise<void> {
-    const user = await this.userService.findUserByEmail(email);
+    const user = await this.userApi.findUserByEmail(email);
 
     // Security: Always return success to prevent email enumeration
     if (!user) {
@@ -285,13 +297,13 @@ export class AuthService {
     }
 
     // Revoke any existing forgot password tokens for this user
-    await this.userTokenService.revokeAllUserTokensByType((user as any).userId, TokenType.FORGOT_PASSWORD);
+    await this.userTokenService.revokeAllUserTokensByType(user.userId, TokenType.FORGOT_PASSWORD);
 
     const jwtSecret = this.configService.get<string>('JWT_SECRET') || 'default_secret';
     const token = this.jwtService.sign(
       {
-        userId: (user as any).userId,
-        userEmail: (user as any).userEmail,
+        userId: user.userId,
+        userEmail: user.userEmail,
       },
       { secret: jwtSecret, expiresIn: '1h' }
     );
@@ -300,7 +312,7 @@ export class AuthService {
     const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
 
     await this.userTokenService.createToken({
-      userId: (user as any).userId,
+      userId: user.userId,
       token: token,
       tokenType: TokenType.FORGOT_PASSWORD,
       expiresAt: expiresAt,
@@ -309,8 +321,15 @@ export class AuthService {
     const resetBaseUrl = this.configService.get<string>('PASSWORD_RESET_URL') || 'http://localhost:3000/reset-password';
     const resetLink = `${resetBaseUrl}?token=${token}`;
 
-    await this.emailService.sendPasswordResetEmail((user as any).userEmail, {
-      userName: (user as any).userName,
+    // True fire and forget
+    this.sendForgotPasswordEmailAsync({ userEmail: user.userEmail, userName: user.userName }, resetLink).catch((err) => {
+      console.error('[Auth] Failed to send password reset email asynchronously:', err);
+    });
+  }
+
+  private async sendForgotPasswordEmailAsync(user: { userEmail: string; userName: string }, resetLink: string): Promise<void> {
+    await this.emailService.sendPasswordResetEmail(user.userEmail, {
+      userName: user.userName,
       resetLink,
       expiryHours: 1,
     });
@@ -333,7 +352,7 @@ export class AuthService {
 
       const hashedPassword = await PasswordUtils.hash(newPassword);
 
-      await this.userService.updateUserById(tokenData.userId, { userPassword: hashedPassword });
+      await this.userApi.updateUserById(tokenData.userId, { userPassword: hashedPassword });
 
       await this.userTokenService.revokeToken(tokenData.userId, token);
 
