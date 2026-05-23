@@ -6,6 +6,8 @@ import { OrderService } from '../services/order.service';
 import { OrderStatusKey } from '../../../generated/prisma';
 import { MENU_MODULE_API } from 'src/modules/menu/interfaces/menu-module.interface';
 import type { IMenuModuleApi } from 'src/modules/menu/interfaces/menu-module.interface';
+import { CART_MODULE_API } from 'src/modules/cart/interfaces/cart-module.interface';
+import type { ICartModuleApi } from 'src/modules/cart/interfaces/cart-module.interface';
 
 @Injectable()
 export class PaymentSagaListener {
@@ -14,6 +16,7 @@ export class PaymentSagaListener {
   constructor(
     private readonly orderService: OrderService,
     @Inject(MENU_MODULE_API) private readonly menuApi: IMenuModuleApi,
+    @Inject(CART_MODULE_API) private readonly cartApi: ICartModuleApi,
   ) { }
 
   // @OnEvent(ORDER_EVENTS.TRACKING_UPDATED)
@@ -58,6 +61,9 @@ export class PaymentSagaListener {
         orderId: payload.orderId,
         newOrderStatus: OrderStatusKey.COMPLETED,
       });
+
+       // 2. Clear the cart on payment success! 🎉
+      await this.cartApi.clearCartByCustomerId(payload.customerId);
 
       this.logger.log(`Order ${payload.orderId} marked COMPLETED`);
     } catch (err: any) {
