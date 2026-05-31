@@ -46,14 +46,18 @@ RUN npm run build
 # ── Stage 4: Production (Final Image) ─────────────────────────────────────────
 FROM base AS production
 
-COPY package*.json ./
+# All build steps run as root ✅
+COPY --chown=node:node package*.json ./
 RUN npm ci --omit=dev
 
 # Copy compiled output and generated prisma client from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/generated/prisma ./dist/src/generated/prisma
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/src/generated/prisma ./dist/src/generated/prisma
+COPY --chown=node:node --from=builder /app/prisma ./prisma
+COPY --chown=node:node --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Switch to non-root RIGHT BEFORE running the app ✅
+USER node
 
 EXPOSE 3000
 
